@@ -1,76 +1,72 @@
-# DOM XSS in AngularJS Expression Injection  
-**PortSwigger Web Security Academy – Practitioner**
+# 🔀 DOM XSS — AngularJS Expression Injection
 
-## 🔎 Lab Description
-The search functionality reflects user input inside an AngularJS expression context.  
-Angle brackets `< >` and double quotes `"` are HTML‑encoded, preventing traditional HTML-based XSS.  
-However, AngularJS still evaluates expressions inside `{{ ... }}`, allowing JavaScript execution.
+![Lab](https://img.shields.io/badge/Lab-DOM%20XSS%20in%20AngularJS-red?style=flat-square)
+![Difficulty](https://img.shields.io/badge/Difficulty-Apprentice-green?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Solved-brightgreen?style=flat-square)
 
 ---
 
-## 🧠 Root Cause
-The page contains:
+## 📋 Lab Description
 
-```html
-<body ng-app>
+This lab contains a DOM-based XSS vulnerability in a AngularJS expression within the search functionality.
+AngularJS processes `ng-app` directives and evaluates `{{ }}` expressions — if user input lands inside an AngularJS context, we can execute JavaScript without `<script>` tags.
+
+---
+
+## 🔍 How AngularJS Works
+
+AngularJS scans the DOM for `ng-app` and evaluates expressions like:
 ```
-This activates AngularJS auto‑expression evaluation.
-
-User input appears inside:
-
-```html
-0 search results for 'USER_INPUT'
+{{ 7 * 7 }}  →  49
 ```
-When injecting:
 
-```html
+If user input is reflected inside an `ng-app` scope, we can inject an expression that executes JS.
+
+---
+
+## 🛠️ Steps to Reproduce
+
+**1. Find the injection point**
+
+Enter a test string in the search box → view page source → confirm the input is reflected inside an `ng-app` element.
+
+**2. Test with a math expression**
+```
 {{7*7}}
 ```
-AngularJS evaluates it → output becomes:
+If the page shows `49` → AngularJS is evaluating the expression → injection confirmed.
 
-```html
-0 search results for '49'
-```
-This confirms that user input is interpreted as an AngularJS expression.
-
-🎯 Exploitation Strategy
-Use AngularJS expression injection instead of HTML tags.
-
-Reach the Function constructor through:
-
-constructor
-
-then constructor.constructor
-
-Build and execute arbitrary JavaScript.
-
-This bypasses:
-
-< encoding
-
-" encoding
-
-HTML tag restrictions
-
-```html
+**3. Inject the payload**
+```javascript
 {{constructor.constructor('alert(1)')()}}
 ```
-Explanation:
 
-constructor → gets the constructor of the current object
+This works by accessing the `Function` constructor through the scope chain and executing arbitrary JS.
 
-constructor.constructor → resolves to Function
+---
 
-Function('alert(1)')() → executes JavaScript
+## 💉 Payload Used
 
-✅ Impact
-Full JavaScript execution inside the AngularJS context → DOM-based XSS.
+```javascript
+{{constructor.constructor('alert(1)')()}}
+```
 
-🧩 Key Takeaways
-AngularJS expression injection is a powerful XSS vector.
+| Part | Explanation |
+|------|-------------|
+| `{{...}}` | AngularJS expression syntax |
+| `constructor.constructor` | Accesses the `Function` constructor via the scope chain |
+| `('alert(1)')()` | Creates and immediately executes a new function |
 
-No need for HTML tags or angle brackets.
+---
 
-constructor.constructor gives access to the Function constructor → arbitrary JS execution.
+## ✅ Key Takeaway
 
-Encoding < and " does NOT prevent AngularJS-based XSS.
+> When AngularJS is on the page, you don't need `<script>` tags. The `{{ }}` syntax IS the execution context. Always check for `ng-app` in the source.
+
+---
+
+## 🛡️ Prevention
+
+- Avoid using `$eval`, `$parse`, or unsanitized user input inside AngularJS templates
+- Use a strict Content Security Policy (CSP)
+- Upgrade to Angular (v2+) which doesn't use client-side templates the same way
