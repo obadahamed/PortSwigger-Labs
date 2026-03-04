@@ -14,7 +14,7 @@
 
 | Vulnerability | Completed | Total |
 |---------------|:---------:|:-----:|
-| 💉 SQL Injection | 3 | 18 |
+| 💉 SQL Injection | 9 | 18 |
 | 🔀 Cross-Site Scripting (XSS) | 2 | 30 |
 | 🔐 Authentication | 0 | 14 |
 | 🛡️ Access Control | 0 | 13 |
@@ -27,10 +27,8 @@
 
 ```
 PortSwigger-Labs/
-├── SQLi/
-│   ├── notes.md          → Concept explanation
-│   ├── payloads.md       → All payloads used
-│   └── what-i-learned.md → Key takeaways
+├── SQLi
+├── SQLi LABS
 ├── XSS labs/
 │   ├── notes.md
 │   ├── payloads.md
