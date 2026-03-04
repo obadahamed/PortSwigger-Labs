@@ -14,7 +14,7 @@
 
 | Vulnerability | Completed | Total |
 |---------------|:---------:|:-----:|
-| 💉 SQL Injection | 9 | 18 |
+| 💉 SQL Injection | 16 | 18 |
 | 🔀 Cross-Site Scripting (XSS) | 2 | 30 |
 | 🔐 Authentication | 0 | 14 |
 | 🛡️ Access Control | 0 | 13 |
