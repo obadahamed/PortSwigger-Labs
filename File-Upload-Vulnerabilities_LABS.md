@@ -1,6 +1,6 @@
 # File Upload Vulnerabilities — PortSwigger Web Security Academy
 
-**Author:** XENOS  
+**Author:** OBADA  
 **Platform:** PortSwigger Web Security Academy  
 **Category:** File Upload Vulnerabilities  
 **Difficulty:** Apprentice → Practitioner  
