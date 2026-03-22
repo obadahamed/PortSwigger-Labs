@@ -20,7 +20,7 @@
 | 🛡️ Access Control | 0 | 13 |
 | 📁 Path Traversal | 0 | 6 |
 | ⚙️ Command Injection | 0 | 5 |
-
+| File upload | 7 | 7 |
 ---
 
 ## 📁 Structure
