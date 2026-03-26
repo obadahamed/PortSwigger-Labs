@@ -1,6 +1,6 @@
 # Server-Side Request Forgery (SSRF) — PortSwigger Labs Write-Up
 
-**Author:** XENOS  
+**Author:** OBADA  
 **Platform:** PortSwigger Web Security Academy  
 **Category:** Server-Side Request Forgery (SSRF)  
 **Difficulty:** Apprentice → Practitioner  
