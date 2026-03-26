@@ -1,5 +1,4 @@
 # 🔓 PortSwigger Web Security Academy — Labs & Writeups
-
 ![Web Security](https://img.shields.io/badge/Focus-Web%20Application%20Security-red?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-PortSwigger%20Academy-orange?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)
@@ -16,11 +15,13 @@
 |---------------|:---------:|:-----:|
 | 💉 SQL Injection | 16 | 18 |
 | 🔀 Cross-Site Scripting (XSS) | 13 | 30 |
+| 🌐 Server-Side Request Forgery (SSRF) | 5 | 7 |
 | 🔐 Authentication | 0 | 14 |
 | 🛡️ Access Control | 0 | 13 |
 | 📁 Path Traversal | 0 | 6 |
 | ⚙️ Command Injection | 0 | 5 |
-| File upload | 7 | 7 |
+| 📤 File Upload | 7 | 7 |
+
 ---
 
 ## 📁 Structure
